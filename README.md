@@ -52,9 +52,9 @@ Ovyl uses Beam's colors and controls, and follows the system's light or dark app
 
 The sidebars use glass icons made with the tasteful-icons skill: a milky white glass glyph on a superellipse tile in one of Ovyl's earth tones. Home, New and Settings in the window's sidebar; Speech, Screen Text, Formatting, Assistant and Storage in Settings, where each pane's icon also stands beside its title. A folder in the sidebar is the same folder glass on a tile in the folder's own color.
 
-![The icons](design/icons/build/preview.png)
+![The icons](design/icons/preview.png)
 
-The glyphs are written in `design/icons/make-spec.py`. `python3 design/icons/export.py` builds them (SVGs and 1024-point PNGs in `design/icons/build`) and puts them in the asset catalog as `icon-<name>`.
+The glyphs are written in `design/icons/make-spec.py`. `python3 design/icons/export.py` builds them, keeps their SVGs in `design/icons/svg` with a preview, and puts them in the asset catalog as `icon-<name>`.
 
 ## The logo
 

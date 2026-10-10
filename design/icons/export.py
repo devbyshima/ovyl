@@ -5,8 +5,8 @@ the asset catalog as icon-<name>.
     python3 design/icons/export.py [path to the tasteful-icons skill]
 
 The skill defaults to ~/Dev/.claude/skills/tasteful-icons, or $TASTEFUL_ICONS.
-The spec comes from make-spec.py; the build, with SVGs and a preview, goes
-to design/icons/build.
+The spec comes from make-spec.py. The SVGs and a preview are kept in
+design/icons; 1024-point PNGs go to design/icons/build, which git ignores.
 """
 import json
 import os
@@ -54,6 +54,10 @@ for name in names:
     with open(os.path.join(folder, "Contents.json"), "w") as f:
         json.dump({"images": [{"filename": f"{name}.png", "idiom": "universal"}],
                    "info": {"author": "xcode", "version": 1}}, f, indent=2)
-# The PNGs are made again from the SVGs, so only those and the preview are kept.
+# The SVGs and the preview are kept beside the spec; the PNGs are made again
+# from the SVGs whenever they're needed.
 shutil.rmtree(os.path.join(build, f"png@{size}"))
+shutil.rmtree(os.path.join(here, "svg"), ignore_errors=True)
+shutil.copytree(os.path.join(build, "svg"), os.path.join(here, "svg"))
+shutil.copy(os.path.join(build, "preview.png"), os.path.join(here, "preview.png"))
 print(f"put {len(names)} icons in {os.path.relpath(catalog, root)}")
