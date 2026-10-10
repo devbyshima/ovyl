@@ -20,9 +20,10 @@ extension Folder {
     var color: Color { Color(hex: hex) }
 }
 
-/// The left sidebar: Home and New, then the folders pinned to it, each with
-/// its count. Every folder is on Home; pinning one keeps it here too.
-/// The speech model's state sits at the bottom.
+/// The left sidebar, in the same look as Settings' sidebar: the mark and
+/// Ovyl's name, Home and New, then the folders pinned to it, each with its
+/// count. Every folder is on Home; pinning one keeps it here too. Settings
+/// and the speech model's state sit at the bottom.
 struct SidebarView: View {
     @Environment(ProcessingCenter.self) private var center
     @Environment(Navigator.self) private var navigator
@@ -37,7 +38,8 @@ struct SidebarView: View {
     @State private var dropFolderID: UUID?
     @FocusState private var renameFocused: Bool
 
-    static let width: CGFloat = 224
+    /// Both sidebars, this one and Settings', are this wide.
+    static let width: CGFloat = 200
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -51,51 +53,56 @@ struct SidebarView: View {
             .frame(height: MainWindowStyler.barHeight)
             .background(WindowDragHandle())
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 1) {
-                    row("Home", symbol: "circle.grid.3x3", color: nil, count: notes.count, selected: isListShown(.home) || isUnpinnedFolderShown) {
-                        navigator.go(.home)
-                    }
-                    row("New", symbol: "plus.square", color: nil, count: nil, selected: false, action: onNew)
-                        .help("New note from a video, audio or pictures (⌘N)")
+            SidebarHeader(title: "Ovyl")
+                .padding(.top, 4)
+                .padding(.bottom, 14)
 
-                    HStack {
-                        Text("Folders")
-                            .font(.system(size: 12.5))
-                            .foregroundStyle(Palette.textSecondary)
-                        Spacer()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 2) {
+                    Button { navigator.go(.home) } label: {
+                        SidebarRowLabel("Home", symbol: "circle.grid.3x3", count: notes.count, selected: isListShown(.home) || isUnpinnedFolderShown)
+                    }
+                    .buttonStyle(.plain)
+                    .focusEffectDisabled()
+                    Button(action: onNew) {
+                        SidebarRowLabel("New", symbol: "plus.square")
+                    }
+                    .buttonStyle(.plain)
+                    .focusEffectDisabled()
+                    .help("New note from a video, audio or pictures (⌘N)")
+
+                    SidebarSectionTitle(title: "Folders") {
                         Button { center.createFolder() } label: {
                             Image(systemName: "plus")
-                                .font(.system(size: 14, weight: .regular))
-                                .foregroundStyle(Palette.textPrimary.opacity(0.6))
+                                .font(.system(size: 11.5, weight: .medium))
+                                .foregroundStyle(Palette.textSecondary)
                                 .frame(width: 22, height: 22)
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        .focusEffectDisabled()
                         .help("New folder (⇧⌘N)")
                     }
-                    .padding(.leading, 12)
-                    .padding(.trailing, 6)
-                    .padding(.top, 18)
-                    .padding(.bottom, 4)
+                    .padding(.top, 16)
+                    .padding(.bottom, 2)
 
                     if pinned.isEmpty, cardDrag?.pinsToSidebar != true {
                         Text(folders.isEmpty ? "Make a folder, then drag notes onto it." : "Pin folders from Home to keep them here.")
-                            .font(.system(size: 12))
+                            .font(.system(size: 11))
                             .foregroundStyle(Palette.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
-                            .padding(.horizontal, 12)
+                            .padding(.horizontal, 9)
                             .padding(.vertical, 4)
                     }
                     ForEach(pinned) { folderRow($0) }
                     if cardDrag?.pinsToSidebar == true { pinSlot }
                 }
-                .padding(.horizontal, 10)
+                .padding(.horizontal, 8)
                 .padding(.bottom, 10)
             }
             .scrollIndicators(.never)
 
-            ModelStatusRow()
+            SidebarFooter()
         }
         .frame(width: Self.width)
         .background(Palette.background, ignoresSafeAreaEdges: .top)
@@ -103,7 +110,7 @@ struct SidebarView: View {
         .onDisappear { cardDrag?.sidebarFrame = .zero }
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: pinned.map(\.id))
         .overlay(alignment: .trailing) {
-            Rectangle().fill(Palette.border).frame(width: 1).ignoresSafeArea(edges: .top)
+            Rectangle().fill(Palette.border).frame(width: 0.5).ignoresSafeArea(edges: .top)
         }
     }
 
@@ -119,19 +126,9 @@ struct SidebarView: View {
 
     /// Where a folder card carried over the sidebar will be pinned.
     private var pinSlot: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "pin.fill")
-                .font(.system(size: 13))
-                .foregroundStyle(Palette.accent)
-                .frame(width: 20)
-            Text("Pin to Sidebar")
-                .font(.system(size: 13.5, weight: .medium))
-                .foregroundStyle(Palette.textPrimary)
-            Spacer(minLength: 4)
+        SidebarRowLabel(symbol: "pin.fill", tint: Palette.accent, targeted: true) {
+            Text("Pin to Sidebar").foregroundStyle(Palette.textPrimary)
         }
-        .padding(.horizontal, 10)
-        .frame(height: 30)
-        .background(RowBackground(selected: false, targeted: true))
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { cardDrag?.sidebarPinSlot = $0 }
         .transition(.scale(scale: 0.92, anchor: .top).combined(with: .opacity))
     }
@@ -142,45 +139,20 @@ struct SidebarView: View {
         navigator.route.isList ? navigator.route == list : navigator.listRoute == list
     }
 
-    private func row(_ title: String, symbol: String, color: Color?, count: Int?, selected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 10) {
-                Image(systemName: symbol)
-                    .font(.system(size: 14, weight: .regular))
-                    .foregroundStyle(color ?? (selected ? Palette.accent : Palette.textSecondary))
-                    .frame(width: 20)
-                Text(title)
-                    .font(.system(size: 13.5, weight: selected ? .semibold : .regular))
-                    .foregroundStyle(selected ? Palette.textPrimary : Palette.textSecondary)
-                    .lineLimit(1)
-                Spacer(minLength: 4)
-                if let count {
-                    Text("\(count)")
-                        .font(.system(size: 12.5).monospacedDigit())
-                        .foregroundStyle(Palette.textSecondary)
-                }
-            }
-            .padding(.horizontal, 10)
-            .frame(height: 30)
-            .background(RowBackground(selected: selected))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .focusEffectDisabled()
-    }
-
     private func folderRow(_ folder: Folder) -> some View {
         let route = Route.folder(folder.id)
         let count = notes.filter { $0.folderID == folder.id }.count
-        return HStack(spacing: 10) {
-            Image(systemName: "folder.fill")
-                .font(.system(size: 13.5))
-                .foregroundStyle(folder.color)
-                .frame(width: 20)
+        return SidebarRowLabel(
+            symbol: "folder.fill",
+            tint: folder.color,
+            count: count,
+            selected: isListShown(route),
+            targeted: dropFolderID == folder.id || cardDrag?.fileTarget == folder.id
+        ) {
             if center.folderToRename == folder.id {
                 TextField("Folder name", text: $renameText)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 13.5))
+                    .foregroundStyle(Palette.textPrimary)
                     .focused($renameFocused)
                     .onSubmit { commitRename(folder) }
                     .onExitCommand { center.folderToRename = nil }
@@ -193,21 +165,10 @@ struct SidebarView: View {
                     }
             } else {
                 Text(folder.name)
-                    .font(.system(size: 13.5, weight: isListShown(route) ? .semibold : .regular))
-                    .foregroundStyle(isListShown(route) ? Palette.textPrimary : Palette.textSecondary)
-                    .lineLimit(1)
             }
-            Spacer(minLength: 4)
-            Text("\(count)")
-                .font(.system(size: 12.5).monospacedDigit())
-                .foregroundStyle(Palette.textSecondary)
         }
-        .padding(.horizontal, 10)
-        .frame(height: 30)
-        .background(RowBackground(selected: isListShown(route), targeted: dropFolderID == folder.id || cardDrag?.fileTarget == folder.id))
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { cardDrag?.sidebarFolders[folder.id] = $0 }
         .onDisappear { cardDrag?.sidebarFolders[folder.id] = nil }
-        .contentShape(Rectangle())
         .onTapGesture { navigator.go(route) }
         .contextMenu {
             Button("New Note Here…", systemImage: "plus.square") {
@@ -233,6 +194,89 @@ struct SidebarView: View {
         guard center.folderToRename == folder.id else { return }
         center.rename(folder, to: renameText)
         center.folderToRename = nil
+    }
+}
+
+// MARK: - The sidebars' look
+
+/// The mark and a name at the top of a sidebar: Ovyl's in the window,
+/// "Settings" in Settings.
+struct SidebarHeader: View {
+    let title: String
+
+    var body: some View {
+        HStack(spacing: 7) {
+            OvylMark()
+                .foregroundStyle(Palette.textPrimary)
+                .frame(width: 16, height: 16)
+            Text(title)
+                .font(.system(size: 15, weight: .heavy))
+                .foregroundStyle(Palette.textPrimary)
+        }
+        .padding(.horizontal, 14)
+    }
+}
+
+/// A row in either sidebar: an icon, a name and, in the window's sidebar, a
+/// count. Selected, it's a green wash with a green icon and the name in
+/// bold; a folder's icon keeps its color.
+struct SidebarRowLabel<Title: View>: View {
+    let symbol: String
+    /// The icon's color when it has its own, as a folder's does.
+    var tint: Color?
+    var count: Int?
+    var selected = false
+    /// Something is being dragged over the row.
+    var targeted = false
+    @ViewBuilder var title: Title
+
+    var body: some View {
+        HStack(spacing: 9) {
+            Image(systemName: symbol)
+                .font(.system(size: 12.5))
+                .foregroundStyle(tint ?? (selected ? Palette.accent : Palette.textSecondary))
+                .frame(width: 18)
+            title
+                .font(.system(size: 13, weight: selected ? .semibold : .regular))
+                .foregroundStyle(selected ? Palette.textPrimary : Palette.textSecondary)
+                .lineLimit(1)
+            Spacer(minLength: 4)
+            if let count {
+                Text("\(count)")
+                    .font(.system(size: 11.5).monospacedDigit())
+                    .foregroundStyle(Palette.textSecondary)
+            }
+        }
+        .padding(.horizontal, 9)
+        .padding(.vertical, 7)
+        .background(RowBackground(selected: selected, targeted: targeted))
+        .contentShape(Rectangle())
+    }
+}
+
+extension SidebarRowLabel where Title == Text {
+    init(_ title: String, symbol: String, tint: Color? = nil, count: Int? = nil, selected: Bool = false) {
+        self.init(symbol: symbol, tint: tint, count: count, selected: selected) { Text(title) }
+    }
+}
+
+/// A small capital heading over a group of sidebar rows, as Settings heads
+/// its cards, with room for a button at the end.
+struct SidebarSectionTitle<Trailing: View>: View {
+    let title: String
+    @ViewBuilder var trailing: Trailing
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(title.uppercased())
+                .font(.system(size: 10, weight: .semibold))
+                .tracking(0.6)
+                .foregroundStyle(Palette.textSecondary)
+            Spacer(minLength: 0)
+            trailing
+        }
+        .padding(.leading, 9)
+        .padding(.trailing, 2)
     }
 }
 
@@ -297,54 +341,43 @@ extension Note {
     }
 }
 
-/// Settings at the foot of the sidebar. While the speech model loads, a pill
-/// beside it says so; it goes away once the model is ready.
-struct ModelStatusRow: View {
+/// The foot of the sidebar: Settings, as a row like the others, and while
+/// the speech model loads, a quiet line saying so, which goes once the model
+/// is ready.
+struct SidebarFooter: View {
     @Environment(ProcessingCenter.self) private var center
 
     var body: some View {
-        HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
+            if let status {
+                HStack(spacing: 6) {
+                    if status.isProblem {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 9.5))
+                            .foregroundStyle(Palette.warning)
+                    } else {
+                        LogoLoader(.preparing)
+                            .frame(width: 12, height: 12)
+                            .foregroundStyle(Palette.textSecondary)
+                    }
+                    Text(status.label)
+                        .font(.system(size: 10.5, weight: .medium))
+                        .foregroundStyle(Palette.textSecondary)
+                        .lineLimit(1)
+                }
+                .padding(.horizontal, 9)
+                .help(status.help)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
             SettingsLink {
-                Image(systemName: "gearshape")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Palette.textPrimary.opacity(0.72))
-                    .frame(width: 42, height: 30)
-                    .background(Capsule(style: .continuous).fill(Palette.surface))
-                    .overlay(Capsule(style: .continuous).strokeBorder(Palette.border, lineWidth: 0.5))
-                    .shadow(color: Palette.shadow, radius: 1.5, y: 0.5)
-                    .contentShape(Capsule())
+                SidebarRowLabel("Settings", symbol: "gearshape")
             }
             .buttonStyle(.plain)
             .focusEffectDisabled()
             .help("Settings (⌘,)")
-
-            if let status {
-                HStack(spacing: 7) {
-                    if status.isProblem {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.system(size: 10.5))
-                            .foregroundStyle(Palette.warning)
-                    } else {
-                        LogoLoader(.preparing)
-                            .frame(width: 14, height: 14)
-                            .foregroundStyle(Palette.textPrimary.opacity(0.7))
-                    }
-                    Text(status.label)
-                        .font(.system(size: 12))
-                        .foregroundStyle(Palette.textSecondary)
-                        .lineLimit(1)
-                }
-                .padding(.horizontal, 10)
-                .frame(height: 30)
-                .background(Capsule(style: .continuous).fill(Palette.surface))
-                .overlay(Capsule(style: .continuous).strokeBorder(Palette.border, lineWidth: 0.5))
-                .help(status.help)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-            Spacer(minLength: 0)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 12)
+        .padding(.horizontal, 8)
+        .padding(.bottom, 12)
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: status?.label)
     }
 

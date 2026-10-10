@@ -27,20 +27,13 @@ struct SettingsView: View {
 
     // MARK: Sidebar
 
+    /// In the same look as the window's sidebar, from the same parts.
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 7) {
-                OvylMark()
-                    .foregroundStyle(Palette.textPrimary)
-                    .frame(width: 16, height: 16)
-                Text("Settings")
-                    .font(.system(size: 15, weight: .heavy))
-                    .foregroundStyle(Palette.textPrimary)
-            }
-            .padding(.horizontal, 14)
-            // Clear of the traffic lights.
-            .padding(.top, 40)
-            .padding(.bottom, 14)
+            SidebarHeader(title: "Settings")
+                // Clear of the traffic lights.
+                .padding(.top, 40)
+                .padding(.bottom, 14)
 
             VStack(spacing: 2) {
                 ForEach(SettingsPane.allCases) { sidebarRow($0) }
@@ -54,7 +47,7 @@ struct SettingsView: View {
                 .padding(.horizontal, 16)
                 .padding(.bottom, 14)
         }
-        .frame(width: 200)
+        .frame(width: SidebarView.width)
         .frame(maxHeight: .infinity)
         .background(Palette.background)
         .overlay(alignment: .trailing) {
@@ -63,22 +56,8 @@ struct SettingsView: View {
     }
 
     private func sidebarRow(_ item: SettingsPane) -> some View {
-        let selected = pane == item
-        return Button { pane = item } label: {
-            HStack(spacing: 9) {
-                Image(systemName: item.symbol)
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(selected ? Palette.accent : Palette.textSecondary)
-                    .frame(width: 18)
-                Text(item.title)
-                    .font(.system(size: 13, weight: selected ? .semibold : .regular))
-                    .foregroundStyle(selected ? Palette.textPrimary : Palette.textSecondary)
-                Spacer(minLength: 4)
-            }
-            .padding(.horizontal, 9)
-            .padding(.vertical, 7)
-            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(selected ? Palette.accentSoft : .clear))
-            .contentShape(Rectangle())
+        Button { pane = item } label: {
+            SidebarRowLabel(item.title, symbol: item.symbol, selected: pane == item)
         }
         .buttonStyle(.plain)
         .focusEffectDisabled()
