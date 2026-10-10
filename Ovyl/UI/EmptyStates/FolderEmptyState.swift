@@ -1,9 +1,9 @@
 import SwiftUI
 
-/// An empty folder. The folder sits over the headline, labeled "notes (0)".
-/// A note in one of the days around it gets a handwritten "drag it in"; a
+/// An empty folder. The folder sits over the headline, labeled "Notes". A
+/// note in one of the days around it gets a handwritten "drag it in"; a
 /// pointer picks it up and carries it over, the folder lights up as a drop
-/// target, tips open, takes the note and counts it. Then the round starts over.
+/// target, tips open and takes the note. Then the round starts over.
 struct FolderEmptyState: View {
     var onNew: () -> Void
 
@@ -21,8 +21,6 @@ struct FolderEmptyState: View {
         var target: Double { Ease.window(local, start: 2.1, end: 3.2, fade: 0.3) }
         var open: Double { Ease.out(Ease.progress(local, from: 2.3, over: 0.35)) * (1 - Ease.spring(Ease.progress(local, from: 2.9, over: 0.8))) }
         var filled: Double { Ease.out(Ease.progress(local, from: 2.75, over: 0.3)) * kept }
-        var count: Int { local >= 2.85 && local < FolderEmptyState.lap - 0.5 ? 1 : 0 }
-        var tick: Double { sin(Ease.progress(local, from: 2.85, over: 0.35) * .pi) }
         var pointerIn: Double { Ease.out(Ease.progress(local, from: 1.0, over: 0.45)) }
         var pointerAway: Double { Ease.inOut(Ease.progress(local, from: 2.95, over: 0.7)) }
     }
@@ -82,7 +80,7 @@ struct FolderEmptyState: View {
                 actionHelp: "New note from a video, audio or pictures (⌘N)",
                 t: t
             ) {
-                FolderGlyph(target: round.target, open: round.open, filled: round.filled, count: round.count, tick: round.tick)
+                FolderGlyph(target: round.target, open: round.open, filled: round.filled)
                     .sceneTarget()
                     .padding(.bottom, 26)
             }
@@ -91,16 +89,14 @@ struct FolderEmptyState: View {
 }
 
 /// The folder in the cards' own look: a colored back with its tab, a white
-/// sheet standing in it once a note is in, and the front with the name and
-/// count, which tips forward to take the note. Ovyl's own folder: green
+/// sheet standing in it once a note is in, and the front with the name in
+/// its middle, which tips forward to take the note. Ovyl's own folder: green
 /// deepening toward its shade, a light along the front's top edge, and a
 /// green glow; dashed in the shade while a note is dragged over it.
 struct FolderGlyph: View {
     let target: Double
     let open: Double
     let filled: Double
-    let count: Int
-    let tick: Double
 
     private static let size = CGSize(width: 170, height: 102)
     private let tint = HexColor(Palette.Hex.accent)
@@ -149,23 +145,16 @@ struct FolderGlyph: View {
                     endPoint: .trailing
                 )
                 .frame(height: 1.5)
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text("Notes")
-                            .font(.system(size: 16, weight: .bold))
-                        Text("\(count)")
-                            .font(.system(size: 11, weight: .medium).monospacedDigit())
-                            .tracking(1)
-                            .opacity(0.85)
-                            .scaleEffect(1 + 0.3 * tick, anchor: .leading)
-                    }
+                HStack(alignment: .center) {
+                    Text("Notes")
+                        .font(.system(size: 16, weight: .bold))
                     Spacer(minLength: 4)
                     MoreDots(color: Palette.onAccent, scale: 0.6)
                         .frame(height: 16)
                 }
                 .foregroundStyle(Palette.onAccent)
                 .padding(.horizontal, 14)
-                .padding(.top, 9)
+                .frame(maxHeight: .infinity)
             }
             .frame(width: w, height: h - front)
             .rotation3DEffect(.degrees(-24 * open), axis: (x: 1, y: 0, z: 0), anchor: .bottom, perspective: 0.5)

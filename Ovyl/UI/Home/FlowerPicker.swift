@@ -3,7 +3,8 @@ import SwiftUI
 /// The color flower: a dark disc ringed in a glow of its own colors, holding
 /// twelve rich earth tones (sun-baked reds and oranges, mustard, the app's
 /// green, teals, denim, plum, brown and the app's graphite) around six light
-/// ones and an off-white center. The petal under
+/// ones and an off-white center. Each petal shows the two tones a folder of
+/// that color takes (see FolderTone): the back above, the front below. The petal under
 /// the pointer, and only that one, swells with a white rim and throws its
 /// color out past the ring; moving on, it settles back as the next one
 /// swells. The flower rises out of the button that opens it as a dot, swells
@@ -192,8 +193,20 @@ struct FlowerPicker: View, Animatable {
         ZStack {
             ForEach(Self.petals, id: \.id) { petal in
                 let isHovered = interactive && hovered == petal.id
+                let tone = FolderTone(petal.hex)
+                // Both of the folder's tones, as on a folder: the back above,
+                // the front below.
                 Circle()
-                    .fill(Color(hex: petal.hex))
+                    .fill(LinearGradient(
+                        stops: [
+                            .init(color: tone.back.color, location: 0),
+                            .init(color: tone.back.color, location: 0.46),
+                            .init(color: tone.front.color, location: 0.46),
+                            .init(color: tone.front.color, location: 1),
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    ))
                     .overlay(Circle().strokeBorder(.white.opacity(isHovered ? 1 : 0), lineWidth: 2))
                     .frame(width: petal.size, height: petal.size)
                     // A soft dark edge where petals overlap, deeper as one lifts.

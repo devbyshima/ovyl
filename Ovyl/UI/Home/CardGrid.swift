@@ -844,7 +844,7 @@ struct FolderCard: View {
             let h = geo.size.height
             let front = (h * FolderArtwork.front).rounded()
             ZStack(alignment: .topLeading) {
-                FolderArtwork(tint: tint, count: count, isRaised: isHovered || isTargeted)
+                FolderArtwork(tone: FolderTone(folder.hex), count: count, isRaised: isHovered || isTargeted)
 
                 // The name sits in the middle of the front, as wide as the
                 // dots leave it, and shrinks to fit rather than cut off.
@@ -874,7 +874,7 @@ struct FolderCard: View {
         }
         .frame(height: height)
         .contentShape(FolderBackShape(tabWidth: 0, tabDrop: 0, radius: 28))
-        .shadow(color: tint.color.opacity(0.32), radius: isHovered ? 20 : 16, y: isHovered ? 12 : 9)
+        .shadow(color: FolderTone(folder.hex).isPale ? Palette.shadow : tint.color.opacity(0.32), radius: isHovered ? 20 : 16, y: isHovered ? 12 : 9)
         .scaleEffect(isTargeted ? 1.03 : isHovered ? 1.012 : 1)
         .onHover { isHovered = $0 }
         .animation(.spring(response: 0.3, dampingFraction: 0.75), value: isHovered)
@@ -892,7 +892,7 @@ struct FolderCard: View {
 /// note inside up to three, sinking into the folder's color, and the front.
 /// The folder cards and the list's thumbnails are both drawn with it.
 struct FolderArtwork: View {
-    let tint: HexColor
+    let tone: FolderTone
     let count: Int
     var isRaised = false
 
@@ -906,19 +906,26 @@ struct FolderArtwork: View {
             let front = (h * Self.front).rounded()
             let radius = (h * 0.15).rounded()
             ZStack(alignment: .topLeading) {
+                // The back in its own tone, the front in the folder's color.
                 FolderBackShape(tabWidth: w * 0.445, tabDrop: h * 0.096, radius: radius)
-                    .fill(LinearGradient(colors: [tint.mixed(0.26).color, tint.mixed(0.17).color], startPoint: .top, endPoint: .bottom))
+                    .fill(LinearGradient(colors: [tone.back.mixed(0.06).color, tone.back.color], startPoint: .top, endPoint: .bottom))
                     .frame(height: front + radius)
 
                 PaperSheets(count: min(count, 3), width: w, height: h, isRaised: isRaised)
 
-                // The sheets sink into the folder's color as they reach the front.
-                LinearGradient(colors: [tint.mixed(0.17).color.opacity(0), tint.mixed(0.17).color], startPoint: .top, endPoint: .bottom)
+                // The sheets sink into the back's tone as they reach the front.
+                LinearGradient(colors: [tone.back.color.opacity(0), tone.back.color], startPoint: .top, endPoint: .bottom)
                     .frame(height: h * 0.13)
                     .offset(y: front - h * 0.13)
 
                 UnevenRoundedRectangle(bottomLeadingRadius: radius, bottomTrailingRadius: radius, style: .continuous)
-                    .fill(LinearGradient(colors: [tint.color, tint.mixed(-0.025).color], startPoint: .top, endPoint: .bottom))
+                    .fill(LinearGradient(colors: [tone.front.color, tone.front.mixed(-0.025).color], startPoint: .top, endPoint: .bottom))
+                    .overlay {
+                        if tone.isPale {
+                            UnevenRoundedRectangle(bottomLeadingRadius: radius, bottomTrailingRadius: radius, style: .continuous)
+                                .strokeBorder(tone.back.color, lineWidth: 1)
+                        }
+                    }
                     .frame(height: h - front)
                     .offset(y: front)
             }
@@ -932,7 +939,7 @@ struct FolderThumbnail: View {
     let count: Int
 
     var body: some View {
-        FolderArtwork(tint: HexColor(folder.hex), count: count)
+        FolderArtwork(tone: FolderTone(folder.hex), count: count)
             .frame(width: ListThumbnail.size.width, height: ListThumbnail.size.height)
             .shadow(color: folder.color.opacity(0.3), radius: 4, y: 2)
     }
