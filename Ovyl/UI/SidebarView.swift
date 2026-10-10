@@ -6,9 +6,10 @@ extension UTType {
     static let ovylNote = UTType(exportedAs: "com.fulltimestudio.ovyl.note")
 }
 
-/// A note dragged in the window, to drop on a folder.
+/// Notes dragged in the window, to drop on a folder: the note dragged, or
+/// every selected note when it's one of them.
 struct NoteReference: Codable, Transferable {
-    let id: UUID
+    let ids: [UUID]
 
     static var transferRepresentation: some TransferRepresentation {
         CodableRepresentation(contentType: .ovylNote)
@@ -216,12 +217,12 @@ struct SidebarView: View {
             Button("Rename", systemImage: "pencil") { center.folderToRename = folder.id }
             PinMenuItem(folder: folder)
             Divider()
-            Button("Delete Folder", systemImage: "trash", role: .destructive) {
-                center.delete(folder)
+            Button("Delete Folder and Its Notes…", systemImage: "trash", role: .destructive) {
+                navigator.confirmDeleting(folders: [folder.id])
             }
         }
         .dropDestination(for: NoteReference.self) { references, _ in
-            center.move(references.map(\.id), to: folder.id)
+            center.move(references.flatMap(\.ids), to: folder.id)
             return true
         } isTargeted: { targeted in
             if targeted { dropFolderID = folder.id } else if dropFolderID == folder.id { dropFolderID = nil }
@@ -281,7 +282,7 @@ struct NoteMenuItems: View {
         Button("Show in Finder", systemImage: "folder") { note.revealSource() }
         Divider()
         Button("Delete…", systemImage: "trash", role: .destructive) {
-            navigator.pendingDelete = note.id
+            navigator.confirmDeleting(notes: [note.id])
         }
     }
 }

@@ -37,8 +37,8 @@ final class Navigator {
     private(set) var forward: [Route] = []
     /// The list a note was opened from, for the sidebar highlight.
     private(set) var listRoute: Route = .home
-    /// The note waiting for the user to confirm its deletion.
-    var pendingDelete: UUID?
+    /// The notes and folders waiting for the user to confirm their deletion.
+    var pendingDeletion: PendingDeletion?
     /// Beside a note, the right pane shows the note's info instead of its media.
     var showsNoteInfo = false
     /// The note's info was opened over its media, so leaving it goes back to
@@ -84,6 +84,12 @@ final class Navigator {
         set(next)
     }
 
+    /// Asks to delete notes and folders; the window confirms first.
+    func confirmDeleting(notes: [UUID] = [], folders: [UUID] = []) {
+        guard !notes.isEmpty || !folders.isEmpty else { return }
+        pendingDeletion = PendingDeletion(notes: notes, folders: folders)
+    }
+
     /// Drops routes to notes and folders that no longer exist.
     func prune(notes: Set<UUID>, folders: Set<UUID>) {
         func valid(_ route: Route) -> Bool {
@@ -100,5 +106,79 @@ final class Navigator {
     private func set(_ next: Route) {
         route = next
         if next.isList { listRoute = next }
+    }
+}
+
+/// Notes and folders waiting for the user to confirm their deletion. A
+/// folder takes everything in it along.
+struct PendingDeletion: Equatable {
+    var notes: [UUID] = []
+    var folders: [UUID] = []
+}
+
+/// What the window asks before deleting: a title, what happens, and the
+/// button that does it. Deleting a folder deletes the notes in it, and the
+/// question says so.
+struct DeletionPrompt: Equatable {
+    let title: String
+    let message: String
+    let button: String
+
+    /// `notes` are the titles of the notes chosen, outside the folders
+    /// chosen; `folders` the folders chosen, with how many notes each holds.
+    init(notes: [String], folders: [(name: String, notes: Int)]) {
+        let inside = folders.reduce(0) { $0 + $1.notes }
+        let originals = "The original videos, audio and pictures stay where they are."
+        let goesToo = "Deleting a folder deletes everything in it. The notes and their frames are removed from Ovyl; the original videos, audio and pictures stay where they are."
+        switch (notes.count, folders.count) {
+        case (0, 0):
+            // Nothing left to delete, as while the question goes away.
+            title = "Delete?"
+            message = ""
+            button = "Delete"
+        case (1, 0):
+            title = "Delete “\(notes[0])”?"
+            message = "The note and its frames are removed from Ovyl. The original video, audio or pictures stay where they are."
+            button = "Delete"
+        case (let n, 0):
+            title = "Delete \(Self.count(n, "note"))?"
+            message = "The notes and their frames are removed from Ovyl. \(originals)"
+            button = "Delete \(n) Notes"
+        case (0, 1):
+            let folder = folders[0]
+            if inside == 0 {
+                title = "Delete “\(folder.name)”?"
+                message = "The folder is empty."
+                button = "Delete Folder"
+            } else {
+                title = "Delete “\(folder.name)” and \(inside == 1 ? "the note" : "the \(inside) notes") in it?"
+                message = goesToo
+                button = inside == 1 ? "Delete Folder and Note" : "Delete Folder and Notes"
+            }
+        case (0, let f):
+            if inside == 0 {
+                title = "Delete \(f) folders?"
+                message = "The folders are empty."
+                button = "Delete \(f) Folders"
+            } else {
+                title = "Delete \(f) folders and the \(Self.count(inside, "note")) in them?"
+                message = goesToo
+                button = "Delete Folders and Notes"
+            }
+        case (let n, let f):
+            let chosen = "\(Self.count(n, "note")) and \(Self.count(f, "folder"))"
+            if inside == 0 {
+                title = "Delete \(chosen)?"
+                message = "The notes and their frames are removed from Ovyl. \(originals)"
+            } else {
+                title = "Delete \(chosen), with the \(Self.count(inside, "note")) in \(f == 1 ? "it" : "them")?"
+                message = goesToo
+            }
+            button = "Delete All"
+        }
+    }
+
+    private static func count(_ n: Int, _ word: String) -> String {
+        n == 1 ? "1 \(word)" : "\(n) \(word)s"
     }
 }

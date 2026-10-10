@@ -5,6 +5,7 @@ import SwiftUI
 struct NotesListView: View {
     @Environment(ProcessingCenter.self) private var center
     @Environment(Navigator.self) private var navigator
+    @Environment(Selection.self) private var selection
     let title: String
     var folder: Folder?
     let notes: [Note]
@@ -28,6 +29,12 @@ struct NotesListView: View {
         let foundIDs = Set(found.map(\.id))
         let titles = notes.filter { !foundIDs.contains($0.id) && $0.displayTitle.localizedStandardContains(query) }
         return found + titles
+    }
+
+    /// Whether the page shows cards or results that can be selected.
+    private var hasItems: Bool {
+        if !query.isEmpty { return !results.isEmpty }
+        return folder == nil ? !(notes.isEmpty && folders.isEmpty) : !notes.isEmpty
     }
 
     private func match(for note: Note) -> NoteMatch? {
@@ -83,12 +90,29 @@ struct NotesListView: View {
                     }
                     .keyboardShortcut("f", modifiers: .command)
                 }
-                if query.isEmpty, !(notes.isEmpty && folders.isEmpty) {
-                    PillGroup { HomeView(hasFolders: folder == nil && !folders.isEmpty) }
+                if hasItems {
+                    PillGroup {
+                        PillButton(symbol: "checkmark.circle", help: selection.isActive ? "Done Selecting (esc)" : "Select (⌘A selects all)", isActive: selection.isActive) {
+                            withAnimation(.snappy(duration: 0.2)) {
+                                if selection.isActive { selection.end() } else { selection.begin() }
+                            }
+                        }
+                        if query.isEmpty {
+                            HomeView(hasFolders: folder == nil && !folders.isEmpty)
+                        }
+                    }
                 }
                 AssistantToggle()
             }
             list
+                .overlay(alignment: .bottom) {
+                    if selection.isActive, hasItems {
+                        SelectionBar()
+                            .padding(.bottom, 16)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+                }
+                .animation(.spring(response: 0.35, dampingFraction: 0.85), value: selection.isActive)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Palette.background)
@@ -144,11 +168,14 @@ struct NotesListView: View {
     private var list: some View {
         if notes.isEmpty, folder == nil, folders.isEmpty {
             HomeEmptyState(onNew: onNew)
+                .onAppear { selection.end() }
         } else if notes.isEmpty, folder != nil {
             FolderEmptyState(onNew: onNew)
+                .onAppear { selection.end() }
         } else if !query.isEmpty, results.isEmpty, searched == query {
             SearchEmptyState(query: query)
                 .id(query)
+                .onAppear { selection.show([]) }
         } else if !query.isEmpty {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
@@ -165,9 +192,10 @@ struct NotesListView: View {
                         NoteListRow(note: note, folderName: folderName(of: note), folders: folders, match: match(for: note))
                     }
                 }
-                .padding(.bottom, 24)
+                .padding(.bottom, selection.isActive ? 84 : 24)
             }
             .scrollIndicators(.visible)
+            .onChange(of: results.map(\.id), initial: true) { _, ids in selection.show(ids) }
         } else {
             // Home shows the folders and the notes outside them; a folder, its notes.
             CardGrid(
@@ -187,9 +215,11 @@ struct NotesListView: View {
 }
 
 /// One note in the list: the note's card in miniature, the title, when and
-/// how long, and a menu. The note last opened is highlighted.
+/// how long, and a menu, which turns into a select mark while selecting.
+/// The note last opened is highlighted, as is a selected one.
 struct NoteListRow: View {
     @Environment(Navigator.self) private var navigator
+    @Environment(Selection.self) private var selection: Selection?
     let note: Note
     var folderName: String?
     let folders: [Folder]
@@ -204,6 +234,15 @@ struct NoteListRow: View {
 
     private var isLastOpened: Bool {
         navigator.back.last?.noteID == note.id || navigator.forward.last?.noteID == note.id
+    }
+
+    private var isSelecting: Bool { selection?.isActive == true }
+    private var isSelected: Bool { selection?.contains(note.id) == true }
+
+    /// What a drag carries: every selected note when this one is selected.
+    private var dragged: [UUID] {
+        guard let selection, isSelected else { return [note.id] }
+        return selection.visible.filter(selection.contains)
     }
 
     var body: some View {
@@ -224,34 +263,47 @@ struct NoteListRow: View {
 
             Spacer(minLength: 8)
 
-            Menu {
-                Button("Open", systemImage: "doc.text") { navigator.go(.note(note.id)) }
-                Divider()
-                NoteMenuItems(note: note, folders: folders)
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Palette.textSecondary)
+            if isSelecting {
+                SelectMark(isSelected: isSelected, size: 20)
                     .frame(width: 28, height: 28)
-                    .contentShape(Rectangle())
+                    .transition(.scale(scale: 0.6).combined(with: .opacity))
+            } else {
+                Menu {
+                    Button("Open", systemImage: "doc.text") { navigator.go(.note(note.id)) }
+                    Divider()
+                    NoteMenuItems(note: note, folders: folders)
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Palette.textSecondary)
+                        .frame(width: 28, height: 28)
+                        .contentShape(Rectangle())
+                }
+                .menuStyle(.button)
+                .buttonStyle(.plain)
+                .menuIndicator(.hidden)
+                .fixedSize()
             }
-            .menuStyle(.button)
-            .buttonStyle(.plain)
-            .menuIndicator(.hidden)
-            .fixedSize()
         }
         .padding(.horizontal, 30)
         .padding(.vertical, 10)
-        .background(isLastOpened ? Palette.accentSoft : (isHovered ? Palette.hover : .clear))
+        .background(isSelected || (!isSelecting && isLastOpened) ? Palette.accentSoft : (isHovered ? Palette.hover : .clear))
         .contentShape(Rectangle())
         .onHover { isHovered = $0 }
-        .onTapGesture { navigator.go(.note(note.id)) }
-        .modifier(NoteDrag(id: note.id, title: note.displayTitle, isOn: isDraggable))
-        .contextMenu {
-            Button("Open", systemImage: "doc.text") { navigator.go(.note(note.id)) }
-            Divider()
-            NoteMenuItems(note: note, folders: folders)
+        .onTapGesture {
+            if selection?.click(note.id) != true { navigator.go(.note(note.id)) }
         }
+        .modifier(NoteDrag(ids: dragged, title: dragged.count > 1 ? "\(dragged.count) notes" : note.displayTitle, isOn: isDraggable))
+        .contextMenu {
+            if isSelected {
+                SelectionMenuItems()
+            } else {
+                Button("Open", systemImage: "doc.text") { navigator.go(.note(note.id)) }
+                Divider()
+                NoteMenuItems(note: note, folders: folders)
+            }
+        }
+        .animation(.snappy(duration: 0.2), value: isSelecting)
     }
 
     @ViewBuilder
@@ -378,13 +430,13 @@ struct MatchSnippet: View {
 
 /// A note row that can be dragged onto a folder, when the row drags itself.
 struct NoteDrag: ViewModifier {
-    let id: UUID
+    let ids: [UUID]
     let title: String
     let isOn: Bool
 
     func body(content: Content) -> some View {
         if isOn {
-            content.draggable(NoteReference(id: id)) {
+            content.draggable(NoteReference(ids: ids)) {
                 Text(title)
                     .font(.system(size: 13, weight: .medium))
                     .padding(.horizontal, 10)

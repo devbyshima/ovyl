@@ -99,7 +99,7 @@ struct MediaPane: View {
                         BarButton(symbol: "square.grid.2x2", title: note.kind == .pictures ? "Pictures" : "Frames", key: "F") { navigator.go(.gallery(note.id)) }
                     }
                     BarButton(symbol: "info.circle", title: "Info", key: "I") { navigator.go(.media(note.id, item: nil)) }
-                    BarButton(symbol: "trash", title: "Delete", key: "D") { navigator.pendingDelete = note.id }
+                    BarButton(symbol: "trash", title: "Delete", key: "D") { navigator.confirmDeleting(notes: [note.id]) }
                 }
                 .padding(.bottom, 18)
             }

@@ -14,6 +14,8 @@ struct ContentView: View {
     @State private var media = NoteMedia()
     /// A card carried around Home or a folder, drawn above every pane.
     @State private var cardDrag = CardDrag()
+    /// The cards and rows selected on the page in the middle.
+    @State private var selection = Selection()
     @State private var isDropTargeted = false
     @State private var keyMonitor: Any?
     @AppStorage("showSidebar") private var showSidebar = true
@@ -115,6 +117,7 @@ struct ContentView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .environment(navigator)
         .environment(cardDrag)
+        .environment(selection)
         .background { MainWindowStyler() }
         .background { shortcuts }
         .fileImporter(
@@ -140,19 +143,21 @@ struct ContentView: View {
         } message: {
             Text(center.importError ?? "")
         }
-        .alert(deleteTitle, isPresented: Binding(
-            get: { navigator.pendingDelete != nil },
-            set: { if !$0 { navigator.pendingDelete = nil } }
+        .alert(deletionPrompt.title, isPresented: Binding(
+            get: { navigator.pendingDeletion != nil },
+            set: { if !$0 { navigator.pendingDeletion = nil } }
         )) {
-            Button("Delete", role: .destructive) { deletePending() }
-            Button("Cancel", role: .cancel) { navigator.pendingDelete = nil }
+            Button(deletionPrompt.button, role: .destructive) { deletePending() }
+            Button("Cancel", role: .cancel) { navigator.pendingDeletion = nil }
         } message: {
-            Text("The note and its frames are removed from Ovyl. The original video, audio or pictures stay where they are.")
+            Text(deletionPrompt.message)
         }
         .onChange(of: center.lastImportedID) { _, id in
             if let id { navigator.go(.note(id)) }
         }
         .onChange(of: route.noteID) { media.show(currentNote) }
+        // Selecting is for the page it started on.
+        .onChange(of: route) { selection.end() }
         .onChange(of: showRightPane) { _, shows in
             if !shows, case .note = route { media.player.pause() }
         }
@@ -244,16 +249,32 @@ struct ContentView: View {
         center.isImporterPresented = true
     }
 
-    private var deleteTitle: String {
-        let note = navigator.pendingDelete.flatMap { id in notes.first { $0.id == id } }
-        return "Delete “\(note?.displayTitle ?? "this note")”?"
+    /// The notes and folders waiting to be deleted, as they are now.
+    private var pending: (notes: [Note], folders: [Folder]) {
+        guard let deletion = navigator.pendingDeletion else { return ([], []) }
+        let folderIDs = Set(deletion.folders)
+        let chosen = folders.filter { folderIDs.contains($0.id) }
+        // A note in a folder being deleted goes with its folder.
+        let noteIDs = Set(deletion.notes)
+        let loose = notes.filter { noteIDs.contains($0.id) && !($0.folderID.map(folderIDs.contains) ?? false) }
+        return (loose, chosen)
+    }
+
+    private var deletionPrompt: DeletionPrompt {
+        let (loose, chosen) = pending
+        return DeletionPrompt(
+            notes: loose.map(\.displayTitle),
+            folders: chosen.map { folder in (folder.name, notes.filter { $0.folderID == folder.id }.count) }
+        )
     }
 
     private func deletePending() {
-        if let id = navigator.pendingDelete, let note = notes.first(where: { $0.id == id }) {
-            center.delete(note)
+        let (loose, chosen) = pending
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.86)) {
+            center.delete(notes: loose, folders: chosen)
+            selection.end()
         }
-        navigator.pendingDelete = nil
+        navigator.pendingDeletion = nil
     }
 
     private func prune() {
@@ -301,32 +322,57 @@ struct ContentView: View {
     }
 
     /// F, I and D open the frames, open the info, and delete, for the open
-    /// note, unless text is being typed.
+    /// note; on a page of cards, ⌘A selects them all, Delete deletes what's
+    /// selected and Escape stops selecting. Not while text is being typed.
     private func installKeyMonitor() {
         guard keyMonitor == nil else { return }
         let navigator = navigator
         let center = center
+        let selection = selection
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             let key = event.charactersIgnoringModifiers?.lowercased() ?? ""
-            let plain = event.modifierFlags.intersection([.command, .control, .option]).isEmpty
-            let handled = MainActor.assumeIsolated { Self.handleKey(key, plain: plain, navigator: navigator, center: center) }
+            let modifiers = event.modifierFlags.intersection([.command, .control, .option])
+            let code = event.keyCode
+            let handled = MainActor.assumeIsolated {
+                guard !(NSApp.keyWindow?.firstResponder is NSText), navigator.pendingDeletion == nil else { return false }
+                if navigator.route.isList {
+                    return Self.handleSelectionKey(key, code: code, modifiers: modifiers, navigator: navigator, center: center, selection: selection)
+                }
+                return Self.handleKey(key, plain: modifiers.isEmpty, navigator: navigator, center: center)
+            }
             return handled ? nil : event
         }
     }
 
+    private static func handleSelectionKey(_ key: String, code: UInt16, modifiers: NSEvent.ModifierFlags, navigator: Navigator, center: ProcessingCenter, selection: Selection) -> Bool {
+        switch (key, code) {
+        case ("a", _) where modifiers == .command:
+            guard !selection.visible.isEmpty else { return false }
+            withAnimation(.snappy(duration: 0.2)) { selection.selectAll() }
+        case (_, 53) where selection.isActive:
+            withAnimation(.snappy(duration: 0.2)) { selection.end() }
+        // Delete, or Forward Delete, with or without ⌘.
+        case (_, 51), (_, 117):
+            guard selection.isActive, modifiers.subtracting(.command).isEmpty else { return false }
+            let folders = (try? center.context.fetch(FetchDescriptor<Folder>())) ?? []
+            let selected = Selected(selection, folders: folders)
+            guard !selected.isEmpty else { return false }
+            SelectionActions.delete(selected, navigator: navigator)
+        default:
+            return false
+        }
+        return true
+    }
+
     private static func handleKey(_ key: String, plain: Bool, navigator: Navigator, center: ProcessingCenter) -> Bool {
-        guard plain,
-              !(NSApp.keyWindow?.firstResponder is NSText),
-              navigator.pendingDelete == nil,
-              case .note(let id) = navigator.route
-        else { return false }
+        guard plain, case .note(let id) = navigator.route else { return false }
         switch key {
         case "f":
             // Recordings and text have no frames to show.
             guard center.note(with: id)?.hasGallery == true else { return false }
             navigator.go(.gallery(id))
         case "i": navigator.go(.media(id, item: nil))
-        case "d": navigator.pendingDelete = id
+        case "d": navigator.confirmDeleting(notes: [id])
         default: return false
         }
         return true

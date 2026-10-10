@@ -1,8 +1,8 @@
 import Foundation
 import SwiftData
 
-/// A folder in the sidebar. Notes point at their folder by ID, so deleting a
-/// folder leaves its notes in place, out of any folder.
+/// A folder on Home, and in the sidebar when pinned. Notes point at their
+/// folder by ID; deleting a folder deletes the notes in it too.
 @Model
 final class Folder {
     var id = UUID()

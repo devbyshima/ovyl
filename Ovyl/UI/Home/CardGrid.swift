@@ -6,8 +6,10 @@ import SwiftUI
 /// grid; or a list), how they're sorted, whether folders come first, and
 /// whether notes show their text. Cards and rows can be picked up and carried
 /// into a new order, which is kept as the manual order for that page; a note
-/// carried onto a folder, here or in the sidebar, files into it. A folder's dots bring up its rename, color
-/// and delete pill; the color button opens the color flower.
+/// carried onto a folder, here or in the sidebar, files into it, and takes
+/// every selected note along when it's one of them. A folder's dots bring up
+/// its rename, color, pin and delete pill; the color button opens the color
+/// flower. While selecting, the dots and menus give way to select marks.
 struct CardGrid: View {
     @Environment(ProcessingCenter.self) private var center
     @Environment(Navigator.self) private var navigator
@@ -24,6 +26,9 @@ struct CardGrid: View {
     /// The card being carried, shared with the window, which draws it.
     @Environment(CardDrag.self) private var windowDrag: CardDrag?
     @State private var ownDrag = CardDrag()
+    /// The cards selected, shared with the window and its selection bar.
+    @Environment(Selection.self) private var windowSelection: Selection?
+    @State private var ownSelection = Selection()
     @State private var frames = CardFrames()
     @State private var scrollPosition = ScrollPosition()
     @State private var autoscroll: Task<Void, Never>?
@@ -38,7 +43,6 @@ struct CardGrid: View {
     /// The folder whose name is being edited on its card, and the name so far.
     @State private var editingFolder: UUID?
     @State private var editingName = ""
-    @State private var deleting: Folder?
 
     /// `showsActionsFor` and `pickerOpen` start with a folder's pill, and its
     /// flower, already open, for previews and tests.
@@ -136,7 +140,7 @@ struct CardGrid: View {
                         }
                     }
                     .padding(.top, 8)
-                    .padding(.bottom, 24)
+                    .padding(.bottom, selection.isActive ? 84 : 24)
                 } else {
                     MasonryLayout(columns: columns, spacing: spacing) {
                         ForEach(items) { item in
@@ -187,7 +191,8 @@ struct CardGrid: View {
             .animation(.spring(response: 0.4, dampingFraction: 0.85), value: foldersFirst)
             .animation(.spring(response: 0.4, dampingFraction: 0.85), value: showsText)
             .overlay(alignment: .bottom) {
-                if layout != .list {
+                // The selection bar takes its place while selecting.
+                if layout != .list, !selection.isActive {
                     CardSizeBar(scale: $scale, range: Self.scales)
                         .padding(.bottom, 16)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -202,20 +207,13 @@ struct CardGrid: View {
             }
         }
         .background(Palette.background)
+        .environment(selection)
         // A folder made from Home's toolbar is named right on its card.
         .onChange(of: center.folderToRename, initial: true) { _, _ in beginPendingRename() }
         .onChange(of: folders.map(\.id)) { _, _ in beginPendingRename() }
-        .alert(
-            "Delete “\(deleting?.name ?? "")”?",
-            isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })
-        ) {
-            Button("Delete", role: .destructive) {
-                if let deleting { center.delete(deleting) }
-                deleting = nil
-            }
-            Button("Cancel", role: .cancel) { deleting = nil }
-        } message: {
-            Text("The notes in it stay in Ovyl, out of any folder.")
+        .onChange(of: items.map(\.id), initial: true) { _, ids in selection.show(ids) }
+        .onChange(of: selection.isActive) { _, selecting in
+            if selecting { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { close() } }
         }
     }
 
@@ -264,7 +262,8 @@ struct CardGrid: View {
                 }
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { close() }
             } delete: {
-                deleting = folder
+                // Deleting a folder deletes its notes; the window asks first.
+                navigator.confirmDeleting(folders: [folder.id])
                 close()
             }
             .position(x: barX, y: barY)
@@ -319,6 +318,16 @@ struct CardGrid: View {
     // MARK: Reordering
 
     private var drag: CardDrag { windowDrag ?? ownDrag }
+
+    private var selection: Selection { windowSelection ?? ownSelection }
+
+    /// The notes a carried note takes along: every selected note on the page
+    /// when it's one of them.
+    private func carried(with id: UUID) -> [UUID] {
+        guard selection.contains(id) else { return [id] }
+        let folderIDs = Set(folders.map(\.id))
+        return items.map(\.id).filter { selection.contains($0) && !folderIDs.contains($0) }
+    }
 
     /// The folder this page shows, if it's a folder's page.
     private var pageFolderID: UUID? { UUID(uuidString: scope) }
@@ -475,7 +484,7 @@ struct CardGrid: View {
                 drag.tilt = 0
             } completion: {
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.86)) {
-                    center.move([held.id], to: folder)
+                    center.move(carried(with: held.id), to: folder)
                 }
                 // The note leaves the page first, so its place closes up
                 // before the drag lets go of it.
@@ -529,6 +538,23 @@ struct CardGrid: View {
     /// The card or row as it looks on the page, drawn by the window while
     /// it's held.
     private func preview(of item: Item, size: CGSize) -> AnyView {
+        let card = card(item, size: size)
+        let count = item.isFolder ? 1 : carried(with: item.id).count
+        guard count > 1 else { return card }
+        // A note carrying others along shows how many it carries.
+        return AnyView(card.overlay(alignment: .topTrailing) {
+            Text("\(count)")
+                .font(.system(size: 13, weight: .bold).monospacedDigit())
+                .foregroundStyle(Palette.onAccent)
+                .padding(.horizontal, 8)
+                .frame(minWidth: 26, minHeight: 26)
+                .background(Capsule(style: .continuous).fill(Palette.accent))
+                .shadow(color: Palette.shadow, radius: 3, y: 1)
+                .offset(x: 8, y: -8)
+        })
+    }
+
+    private func card(_ item: Item, size: CGSize) -> AnyView {
         let metrics = metrics(width: frames.width)
         let row = RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Palette.surface)
         switch (item, layout == .list) {
@@ -621,9 +647,11 @@ struct MasonryLayout: Layout {
 // MARK: - Note card
 
 /// A note as a white card: its title, the first of its text fading out,
-/// and the day it was made with a menu.
+/// and the day it was made with a menu. While selecting, the menu turns into
+/// a select mark, and a click selects the card instead of opening it.
 struct NoteCard: View {
     @Environment(Navigator.self) private var navigator
+    @Environment(Selection.self) private var selection: Selection?
     let note: Note
     let folders: [Folder]
     let unit: CGFloat
@@ -650,6 +678,9 @@ struct NoteCard: View {
     /// Notes with text stand two rows tall; an empty or unfinished note, one.
     private var isTall: Bool { note.status == .ready && !preview.isEmpty && showsText }
 
+    private var isSelecting: Bool { selection?.isActive == true }
+    private var isSelected: Bool { selection?.contains(note.id) == true }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(note.displayTitle)
@@ -668,17 +699,23 @@ struct NoteCard: View {
                     .foregroundStyle(CardColor.meta)
                     .lineLimit(1)
                 Spacer(minLength: 8)
-                Menu {
-                    Button("Open", systemImage: "doc.text") { navigator.go(.note(note.id)) }
-                    Divider()
-                    NoteMenuItems(note: note, folders: folders)
-                } label: {
-                    MoreDots(color: CardColor.meta, scale: scale)
+                if isSelecting {
+                    SelectMark(isSelected: isSelected, color: CardColor.meta, size: 22 * scale)
+                        .frame(height: 24)
+                        .transition(.scale(scale: 0.6).combined(with: .opacity))
+                } else {
+                    Menu {
+                        Button("Open", systemImage: "doc.text") { navigator.go(.note(note.id)) }
+                        Divider()
+                        NoteMenuItems(note: note, folders: folders)
+                    } label: {
+                        MoreDots(color: CardColor.meta, scale: scale)
+                    }
+                    .menuStyle(.button)
+                    .buttonStyle(.plain)
+                    .menuIndicator(.hidden)
+                    .fixedSize()
                 }
-                .menuStyle(.button)
-                .buttonStyle(.plain)
-                .menuIndicator(.hidden)
-                .fixedSize()
             }
         }
         .padding(.horizontal, 25 * scale)
@@ -692,18 +729,26 @@ struct NoteCard: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 28 * scale, style: .continuous)
-                .strokeBorder(CardColor.edge, lineWidth: 1)
+                .strokeBorder(isSelected ? Palette.accent : CardColor.edge, lineWidth: isSelected ? 2.5 : 1)
         )
         .shadow(color: CardColor.shadow, radius: isHovered ? 16 : 10, y: isHovered ? 8 : 5)
         .scaleEffect(isHovered ? 1.012 : 1)
         .contentShape(RoundedRectangle(cornerRadius: 28 * scale, style: .continuous))
         .onHover { isHovered = $0 }
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isHovered)
-        .onTapGesture { navigator.go(.note(note.id)) }
+        .animation(.snappy(duration: 0.2), value: isSelecting)
+        .animation(.snappy(duration: 0.18), value: isSelected)
+        .onTapGesture {
+            if selection?.click(note.id) != true { navigator.go(.note(note.id)) }
+        }
         .contextMenu {
-            Button("Open", systemImage: "doc.text") { navigator.go(.note(note.id)) }
-            Divider()
-            NoteMenuItems(note: note, folders: folders)
+            if isSelected {
+                SelectionMenuItems()
+            } else {
+                Button("Open", systemImage: "doc.text") { navigator.go(.note(note.id)) }
+                Divider()
+                NoteMenuItems(note: note, folders: folders)
+            }
         }
         .task(id: "\(note.statusRaw)|\(note.updatedAt?.timeIntervalSince1970 ?? 0)") {
             preview = note.status == .ready ? Self.preview(of: note.markdown) : ""
@@ -819,9 +864,11 @@ enum CardColor {
 
 /// A folder as a colored card: the back with its tab, the notes inside
 /// showing as paper sheets, and the front with the name in its middle and a
-/// menu. Notes dropped on it move into it.
+/// menu, which turns into a select mark while selecting. Notes dropped on it
+/// move into it.
 struct FolderCard: View {
     @Environment(ProcessingCenter.self) private var center
+    @Environment(Selection.self) private var selection: Selection?
     let folder: Folder
     let count: Int
     let height: CGFloat
@@ -836,6 +883,8 @@ struct FolderCard: View {
     @State private var isHovered = false
 
     private var isTargeted: Bool { isDropTarget }
+    private var isSelecting: Bool { selection?.isActive == true }
+    private var isSelected: Bool { selection?.contains(folder.id) == true }
 
     var body: some View {
         let tint = HexColor(folder.hex)
@@ -858,18 +907,32 @@ struct FolderCard: View {
                             .transition(.scale.combined(with: .opacity))
                     }
                     Spacer(minLength: 8 * scale)
-                    Button(action: more) {
-                        MoreDots(color: text, scale: scale)
+                    if isSelecting {
+                        SelectMark(isSelected: isSelected, color: text, size: 22 * scale)
+                            .transition(.scale(scale: 0.6).combined(with: .opacity))
+                    } else {
+                        Button(action: more) {
+                            MoreDots(color: text, scale: scale)
+                        }
+                        .buttonStyle(.plain)
+                        .focusEffectDisabled()
+                        .help("Rename, color, pin or delete")
+                        .anchorPreference(key: FolderDotsAnchor.self, value: .bounds) { [folder.id: $0] }
                     }
-                    .buttonStyle(.plain)
-                    .focusEffectDisabled()
-                    .help("Rename, color, pin or delete")
-                    .anchorPreference(key: FolderDotsAnchor.self, value: .bounds) { [folder.id: $0] }
                 }
                 .foregroundStyle(text)
                 .padding(.horizontal, 25 * scale)
                 .frame(height: h - front)
                 .offset(y: front)
+            }
+            .overlay {
+                // Selected, the folder is ringed in green, a little out from its edge.
+                if isSelected {
+                    FolderOutline(tabWidth: geo.size.width * 0.445 + 4, tabDrop: h * 0.096, radius: (h * 0.15).rounded() + 4)
+                        .stroke(Palette.accent, lineWidth: 2.5)
+                        .padding(-4)
+                        .transition(.opacity)
+                }
             }
         }
         .frame(height: height)
@@ -879,12 +942,57 @@ struct FolderCard: View {
         .onHover { isHovered = $0 }
         .animation(.spring(response: 0.3, dampingFraction: 0.75), value: isHovered)
         .animation(.spring(response: 0.3, dampingFraction: 0.75), value: isTargeted)
-        .onTapGesture { if !naming.isEditing { open() } }
-        .contextMenu {
-            Button("Open", systemImage: "folder") { open() }
-            Button("Rename, Color or Delete…", systemImage: "drop") { more() }
-            PinMenuItem(folder: folder)
+        .animation(.snappy(duration: 0.2), value: isSelecting)
+        .animation(.snappy(duration: 0.18), value: isSelected)
+        .onTapGesture {
+            guard !naming.isEditing else { return }
+            if selection?.click(folder.id) != true { open() }
         }
+        .contextMenu {
+            if isSelected {
+                SelectionMenuItems()
+            } else {
+                Button("Open", systemImage: "folder") { open() }
+                if !isSelecting {
+                    Button("Rename, Color or Delete…", systemImage: "drop") { more() }
+                }
+                PinMenuItem(folder: folder)
+            }
+        }
+    }
+}
+
+/// A folder card's whole outline: the back with its tab, and the front's
+/// round bottom corners.
+struct FolderOutline: Shape {
+    let tabWidth: CGFloat
+    let tabDrop: CGFloat
+    let radius: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        let r = min(radius, rect.height / 2)
+        let top = rect.minY + tabDrop
+        let curve = tabDrop * 1.7
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: rect.maxY - r))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.minY + r))
+        path.addQuadCurve(to: CGPoint(x: rect.minX + r, y: rect.minY), control: CGPoint(x: rect.minX, y: rect.minY))
+        if tabDrop > 0 {
+            path.addLine(to: CGPoint(x: rect.minX + tabWidth - curve, y: rect.minY))
+            path.addCurve(
+                to: CGPoint(x: rect.minX + tabWidth + curve, y: top),
+                control1: CGPoint(x: rect.minX + tabWidth - curve * 0.1, y: rect.minY),
+                control2: CGPoint(x: rect.minX + tabWidth + curve * 0.1, y: top)
+            )
+        }
+        path.addLine(to: CGPoint(x: rect.maxX - r, y: top))
+        path.addQuadCurve(to: CGPoint(x: rect.maxX, y: top + r), control: CGPoint(x: rect.maxX, y: top))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - r))
+        path.addQuadCurve(to: CGPoint(x: rect.maxX - r, y: rect.maxY), control: CGPoint(x: rect.maxX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.minX + r, y: rect.maxY))
+        path.addQuadCurve(to: CGPoint(x: rect.minX, y: rect.maxY - r), control: CGPoint(x: rect.minX, y: rect.maxY))
+        path.closeSubpath()
+        return path
     }
 }
 
@@ -1282,9 +1390,10 @@ struct HomeView: View {
 }
 
 /// A folder as a row in the list view: its color, name and count, and the
-/// dots for its pill.
+/// dots for its pill, or a select mark while selecting.
 struct FolderListRow: View {
     @Environment(ProcessingCenter.self) private var center
+    @Environment(Selection.self) private var selection: Selection?
     let folder: Folder
     let count: Int
     var isDropTarget = false
@@ -1294,6 +1403,8 @@ struct FolderListRow: View {
     @State private var isHovered = false
 
     private var isTargeted: Bool { isDropTarget }
+    private var isSelecting: Bool { selection?.isActive == true }
+    private var isSelected: Bool { selection?.contains(folder.id) == true }
 
     var body: some View {
         HStack(spacing: 14) {
@@ -1306,27 +1417,43 @@ struct FolderListRow: View {
                     .foregroundStyle(Palette.textSecondary)
             }
             Spacer(minLength: 8)
-            Button(action: more) {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Palette.textSecondary)
+            if isSelecting {
+                SelectMark(isSelected: isSelected, size: 20)
                     .frame(width: 28, height: 28)
-                    .contentShape(Rectangle())
+                    .transition(.scale(scale: 0.6).combined(with: .opacity))
+            } else {
+                Button(action: more) {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Palette.textSecondary)
+                        .frame(width: 28, height: 28)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Rename, color, pin or delete")
+                .anchorPreference(key: FolderDotsAnchor.self, value: .bounds) { [folder.id: $0] }
             }
-            .buttonStyle(.plain)
-            .help("Rename, color or delete")
-            .anchorPreference(key: FolderDotsAnchor.self, value: .bounds) { [folder.id: $0] }
         }
         .padding(.horizontal, 30)
         .padding(.vertical, 10)
-        .background(isTargeted ? Palette.accentSoft : isHovered ? Palette.hover : .clear)
+        .background(isTargeted || isSelected ? Palette.accentSoft : isHovered ? Palette.hover : .clear)
         .contentShape(Rectangle())
         .onHover { isHovered = $0 }
-        .onTapGesture { if !naming.isEditing { open() } }
+        .animation(.snappy(duration: 0.2), value: isSelecting)
+        .onTapGesture {
+            guard !naming.isEditing else { return }
+            if selection?.click(folder.id) != true { open() }
+        }
         .contextMenu {
-            Button("Open", systemImage: "folder") { open() }
-            Button("Rename, Color or Delete…", systemImage: "drop") { more() }
-            PinMenuItem(folder: folder)
+            if isSelected {
+                SelectionMenuItems()
+            } else {
+                Button("Open", systemImage: "folder") { open() }
+                if !isSelecting {
+                    Button("Rename, Color or Delete…", systemImage: "drop") { more() }
+                }
+                PinMenuItem(folder: folder)
+            }
         }
     }
 }

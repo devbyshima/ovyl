@@ -221,7 +221,7 @@ struct FlowerPicker: View, Animatable {
     }
 }
 
-/// A dark pill of three buttons for a folder: rename, color and delete.
+/// A dark pill of buttons for a folder: rename, color, pin and delete.
 /// The color button opens the flower above itself.
 struct FolderActionsBar: View {
     let pickerOpen: Bool
@@ -236,7 +236,7 @@ struct FolderActionsBar: View {
             BarIcon(symbol: "pencil", help: "Rename", action: rename)
             BarIcon(symbol: "drop", help: "Color", dimmed: pickerOpen, action: color)
             BarIcon(symbol: isPinned ? "pin.slash" : "pin", help: isPinned ? "Unpin from Sidebar" : "Pin to Sidebar", action: pin)
-            BarIcon(symbol: "trash", help: "Delete Folder", action: delete)
+            BarIcon(symbol: "trash", help: "Delete Folder and Its Notes", action: delete)
         }
         .padding(5)
         .background(RoundedRectangle(cornerRadius: 17, style: .continuous).fill(Palette.darkPanel))

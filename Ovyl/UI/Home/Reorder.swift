@@ -13,6 +13,11 @@ enum OrderStore {
         UserDefaults.standard.set(ids.map(\.uuidString), forKey: key(scope))
     }
 
+    /// Drops the order of a page that's gone, such as a deleted folder's.
+    static func forget(_ scope: String) {
+        UserDefaults.standard.removeObject(forKey: key(scope))
+    }
+
     /// `ids` with `dragged` put where `target` is: after it when moving
     /// forward, before it when moving back, so it takes the target's place.
     static func moving(_ dragged: UUID, to target: UUID, in ids: [UUID]) -> [UUID] {

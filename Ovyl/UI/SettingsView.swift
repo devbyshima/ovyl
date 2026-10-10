@@ -332,7 +332,7 @@ private struct StoragePane: View {
                 ActionRow(
                     title: "Speech model build",
                     subtitle: "The next video takes a few extra minutes while Whisper is prepared for this Mac again.",
-                    action: "Clear…"
+                    action: "Clear"
                 ) {
                     confirmsSpeechClear = true
                 }
@@ -534,7 +534,7 @@ private struct StackedRow<Control: View>: View {
     }
 }
 
-/// A title and note with a green text button at the end.
+/// A title and note with a small capsule button at the end.
 private struct ActionRow: View {
     let title: String
     var subtitle: String?
@@ -548,11 +548,18 @@ private struct ActionRow: View {
             Spacer(minLength: 10)
             Button(action: perform) {
                 Text(action)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(isEnabled ? Palette.accentText : Palette.textSecondary)
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundStyle(isEnabled ? Palette.textPrimary : Palette.textSecondary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 3)
+                    .background(Capsule(style: .continuous).fill(Palette.textPrimary.opacity(0.07)))
+                    .overlay(Capsule(style: .continuous).strokeBorder(Palette.textPrimary.opacity(0.10), lineWidth: 0.5))
+                    .contentShape(Capsule(style: .continuous))
+                    .opacity(isEnabled ? 1 : 0.6)
             }
             .buttonStyle(.plain)
             .focusEffectDisabled()
+            .fixedSize()
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)

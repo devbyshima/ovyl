@@ -518,7 +518,7 @@ struct InspectorBottomBar: View {
             circleButton("doc.on.doc", copyHelp, action: copy)
             circleButton("folder", "Show in Finder") { note.revealSource() }
             Spacer()
-            circleButton("trash", "Delete the note") { navigator.pendingDelete = note.id }
+            circleButton("trash", "Delete the note") { navigator.confirmDeleting(notes: [note.id]) }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)

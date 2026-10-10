@@ -158,10 +158,24 @@ final class ProcessingCenter {
     }
 
     func delete(_ note: Note) {
+        remove(note)
+        save()
+    }
+
+    /// Deletes notes and folders together, with everything in the folders,
+    /// saving once.
+    func delete(notes: [Note], folders: [Folder]) {
+        let folderIDs = Set(folders.map(\.id))
+        for folder in folders { remove(folder) }
+        for note in notes where note.folderID.map(folderIDs.contains) != true { remove(note) }
+        save()
+    }
+
+    /// Stops the note if it's being made, and deletes it with its frames.
+    private func remove(_ note: Note) {
         stop(note)
         try? FileManager.default.removeItem(at: note.thumbnailsFolder)
         context.delete(note)
-        save()
     }
 
     func save() {
@@ -214,13 +228,22 @@ final class ProcessingCenter {
         save()
     }
 
-    /// Deletes the folder; its notes stay, out of any folder.
+    /// Deletes the folder and everything in it: its notes, and their frames.
     func delete(_ folder: Folder) {
-        let id = folder.id
-        let inside = FetchDescriptor<Note>(predicate: #Predicate { $0.folderID == id })
-        for note in (try? context.fetch(inside)) ?? [] { note.folderID = nil }
-        context.delete(folder)
+        remove(folder)
         save()
+    }
+
+    /// The notes in a folder.
+    func notes(in folder: Folder) -> [Note] {
+        let id = folder.id
+        return (try? context.fetch(FetchDescriptor<Note>(predicate: #Predicate { $0.folderID == id }))) ?? []
+    }
+
+    private func remove(_ folder: Folder) {
+        for note in notes(in: folder) { remove(note) }
+        OrderStore.forget(folder.id.uuidString)
+        context.delete(folder)
     }
 
     /// Makes a note of text, as the assistant does when it combines notes.
