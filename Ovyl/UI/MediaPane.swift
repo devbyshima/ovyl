@@ -96,10 +96,13 @@ struct MediaPane: View {
             .overlay(alignment: .bottom) {
                 FloatingBar {
                     if note.hasGallery {
-                        BarButton(symbol: "square.grid.2x2", title: note.kind == .pictures ? "Pictures" : "Frames", key: "F") { navigator.go(.gallery(note.id)) }
+                        let pictures = note.kind == .pictures
+                        BarButton(icon: pictures ? "pictures" : "frames", title: pictures ? "Pictures" : "Frames", help: pictures ? "Show the pictures (F)" : "Show the frames (F)") {
+                            navigator.go(.gallery(note.id))
+                        }
                     }
-                    BarButton(symbol: "info.circle", title: "Info", key: "I") { navigator.go(.media(note.id, item: nil)) }
-                    BarButton(symbol: "trash", title: "Delete", key: "D") { navigator.confirmDeleting(notes: [note.id]) }
+                    BarButton(icon: "info", title: "Info", help: "Show the media's info (I)") { navigator.go(.media(note.id, item: nil)) }
+                    BarButton(icon: "delete", title: "Delete", help: "Delete the note (D)") { navigator.confirmDeleting(notes: [note.id]) }
                 }
                 .padding(.bottom, 18)
             }

@@ -106,20 +106,6 @@ struct PillMenu<Items: View>: View {
     }
 }
 
-/// The key that triggers an action, shown beside it.
-struct KeyChip: View {
-    let key: String
-
-    var body: some View {
-        Text(key)
-            .font(.system(size: 11, weight: .medium))
-            .foregroundStyle(Palette.textSecondary)
-            .frame(minWidth: 20, minHeight: 18)
-            .padding(.horizontal, 2)
-            .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(Palette.fill))
-    }
-}
-
 /// A glass capsule with a hairline edge that floats over content, near the
 /// bottom of a pane, as Beam's toasts do.
 struct FloatingBar<Content: View>: View {
@@ -133,33 +119,37 @@ struct FloatingBar<Content: View>: View {
     }
 }
 
-/// An icon, a label and a key, for a `FloatingBar`.
+/// One of the app's glass icons and a label, for a `FloatingBar`. Its key,
+/// if it has one, is in its help.
 struct BarButton: View {
-    let symbol: String
+    /// The glass icon's name: "frames" is `icon-frames` in the asset catalog.
+    let icon: String
     let title: String
-    var key: String?
+    var help: String?
     let action: () -> Void
     @State private var isHovered = false
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: 7) {
-                Image(systemName: symbol)
-                    .font(.system(size: 12.5, weight: .medium))
+                Image("icon-\(icon)")
+                    .resizable()
+                    .interpolation(.high)
+                    .frame(width: 20, height: 20)
                 Text(title)
                     .font(.system(size: 13))
-                if let key { KeyChip(key: key).padding(.leading, 3) }
             }
             .foregroundStyle(Palette.textPrimary)
-            .padding(.leading, 12)
-            .padding(.trailing, key == nil ? 12 : 6)
-            .padding(.vertical, 5)
+            .padding(.leading, 6)
+            .padding(.trailing, 12)
+            .padding(.vertical, 3)
             .background(Capsule(style: .continuous).fill(isHovered ? Palette.hover : .clear))
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
         .focusEffectDisabled()
         .onHover { isHovered = $0 }
+        .help(help ?? title)
     }
 }
 
