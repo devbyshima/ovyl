@@ -57,7 +57,7 @@ struct SettingsView: View {
 
     private func sidebarRow(_ item: SettingsPane) -> some View {
         Button { pane = item } label: {
-            SidebarRowLabel(item.title, symbol: item.symbol, selected: pane == item)
+            SidebarRowLabel(item.title, icon: .tile(item.icon), selected: pane == item)
         }
         .buttonStyle(.plain)
         .focusEffectDisabled()
@@ -91,13 +91,14 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         }
     }
 
-    var symbol: String {
+    /// The pane's glass icon, `icon-<name>` in the asset catalog.
+    var icon: String {
         switch self {
-        case .speech: "waveform"
-        case .screen: "text.viewfinder"
-        case .formatting: "text.alignleft"
-        case .assistant: "sparkles"
-        case .storage: "internaldrive"
+        case .speech: "speech"
+        case .screen: "screen-text"
+        case .formatting: "formatting"
+        case .assistant: "assistant"
+        case .storage: "storage"
         }
     }
 }
@@ -117,7 +118,7 @@ private struct SpeechPane: View {
     ]
 
     var body: some View {
-        PaneScaffold(title: "Speech", subtitle: "How Ovyl turns what's said into text.") {
+        PaneScaffold(pane: .speech, subtitle: "How Ovyl turns what's said into text.") {
             SettingsGroup(title: "Transcription") {
                 StackedRow(title: "Engine", note: engineNote) {
                     CapsuleChoice(selection: $engine, options: EnginePreference.allCases.map { ($0.rawValue, $0.label) })
@@ -187,7 +188,7 @@ private struct ScreenTextPane: View {
     @AppStorage(PipelineOptions.frameIntervalKey) private var frameInterval = 1.0
 
     var body: some View {
-        PaneScaffold(title: "Screen Text", subtitle: "What Ovyl reads from the screen in a video.") {
+        PaneScaffold(pane: .screen, subtitle: "What Ovyl reads from the screen in a video.") {
             SettingsGroup(
                 title: "On-screen text",
                 footer: "Subtitles that repeat the speech appear once: the transcript, or the subtitles where speech was unclear. Without speech, captions become the note's text."
@@ -210,7 +211,7 @@ private struct FormattingPane: View {
     @AppStorage(PipelineOptions.smartFormattingKey) private var smartFormatting = false
 
     var body: some View {
-        PaneScaffold(title: "Formatting", subtitle: "Titles, summaries and headings for each note.") {
+        PaneScaffold(pane: .formatting, subtitle: "Titles, summaries and headings for each note.") {
             SettingsGroup(title: "Smart formatting", footer: "The transcript itself is never reworded. When it's off, notes use slide titles and the file name for headings.") {
                 ToggleRow(title: "Write titles and summaries with Apple Intelligence", subtitle: note, isOn: $smartFormatting)
             }
@@ -233,7 +234,7 @@ private struct AssistantPane: View {
     private var assistant: AssistantSession { .shared }
 
     var body: some View {
-        PaneScaffold(title: "Assistant", subtitle: "The model that answers when you ask about your notes.") {
+        PaneScaffold(pane: .assistant, subtitle: "The model that answers when you ask about your notes.") {
             SettingsGroup(title: "Model", footer: assistant.model.privacy) {
                 ValueRow(title: "Model") {
                     ValueMenu(label: assistant.model.label) {
@@ -287,7 +288,7 @@ private struct StoragePane: View {
     private var storage: StorageManager { .shared }
 
     var body: some View {
-        PaneScaffold(title: "Storage", subtitle: "What Ovyl keeps on this Mac.") {
+        PaneScaffold(pane: .storage, subtitle: "What Ovyl keeps on this Mac.") {
             SettingsGroup(
                 title: "Space used",
                 footer: "Ovyl never copies your videos, audio or pictures; notes point to them where they are. Frames of deleted notes and old temporary files are cleaned up on their own."
@@ -361,21 +362,28 @@ enum StorageRow {
 
 /// A scrolling pane: a large title and a line under it, above its cards.
 private struct PaneScaffold<Content: View>: View {
-    let title: String
+    let pane: SettingsPane
     var subtitle: String?
     @ViewBuilder var content: Content
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(title)
-                        .font(.system(size: 22, weight: .bold))
-                        .foregroundStyle(Palette.textPrimary)
-                    if let subtitle {
-                        Text(subtitle)
-                            .font(.system(size: 12))
-                            .foregroundStyle(Palette.textSecondary)
+                HStack(spacing: 12) {
+                    Image("icon-\(pane.icon)")
+                        .resizable()
+                        .interpolation(.high)
+                        .frame(width: 42, height: 42)
+                        .shadow(color: Palette.shadow, radius: 2, y: 1)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(pane.title)
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundStyle(Palette.textPrimary)
+                        if let subtitle {
+                            Text(subtitle)
+                                .font(.system(size: 12))
+                                .foregroundStyle(Palette.textSecondary)
+                        }
                     }
                 }
                 content

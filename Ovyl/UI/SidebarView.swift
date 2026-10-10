@@ -21,8 +21,8 @@ extension Folder {
 }
 
 /// The left sidebar, in the same look as Settings' sidebar: the mark and
-/// Ovyl's name, Home and New, then the folders pinned to it, each with its
-/// count. Every folder is on Home; pinning one keeps it here too. Settings
+/// Ovyl's name, Home and New with their glass icons, then the folders pinned
+/// to it, each on a glass tile in its color, with its count. Every folder is on Home; pinning one keeps it here too. Settings
 /// and the speech model's state sit at the bottom.
 struct SidebarView: View {
     @Environment(ProcessingCenter.self) private var center
@@ -60,12 +60,12 @@ struct SidebarView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 2) {
                     Button { navigator.go(.home) } label: {
-                        SidebarRowLabel("Home", symbol: "circle.grid.3x3", count: notes.count, selected: isListShown(.home) || isUnpinnedFolderShown)
+                        SidebarRowLabel("Home", icon: .tile("home"), count: notes.count, selected: isListShown(.home) || isUnpinnedFolderShown)
                     }
                     .buttonStyle(.plain)
                     .focusEffectDisabled()
                     Button(action: onNew) {
-                        SidebarRowLabel("New", symbol: "plus.square")
+                        SidebarRowLabel("New", icon: .tile("new"))
                     }
                     .buttonStyle(.plain)
                     .focusEffectDisabled()
@@ -126,7 +126,7 @@ struct SidebarView: View {
 
     /// Where a folder card carried over the sidebar will be pinned.
     private var pinSlot: some View {
-        SidebarRowLabel(symbol: "pin.fill", tint: Palette.accent, targeted: true) {
+        SidebarRowLabel(icon: .symbol("pin.fill", Palette.accent), targeted: true) {
             Text("Pin to Sidebar").foregroundStyle(Palette.textPrimary)
         }
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { cardDrag?.sidebarPinSlot = $0 }
@@ -143,8 +143,7 @@ struct SidebarView: View {
         let route = Route.folder(folder.id)
         let count = notes.filter { $0.folderID == folder.id }.count
         return SidebarRowLabel(
-            symbol: "folder.fill",
-            tint: folder.color,
+            icon: .folder(folder.hex),
             count: count,
             selected: isListShown(route),
             targeted: dropFolderID == folder.id || cardDrag?.fileTarget == folder.id
@@ -217,13 +216,22 @@ struct SidebarHeader: View {
     }
 }
 
+/// What stands at the start of a sidebar row.
+enum SidebarIcon {
+    /// One of the app's glass icons, by name: "home" is `icon-home` in the
+    /// asset catalog (made by design/icons/export.py).
+    case tile(String)
+    /// A folder's glass on a tile in the folder's own color.
+    case folder(String)
+    /// A plain symbol in a color, for a row that isn't a place, like the
+    /// spot a folder is pinned to.
+    case symbol(String, Color)
+}
+
 /// A row in either sidebar: an icon, a name and, in the window's sidebar, a
-/// count. Selected, it's a green wash with a green icon and the name in
-/// bold; a folder's icon keeps its color.
+/// count. Selected, it's a green wash with the name in bold.
 struct SidebarRowLabel<Title: View>: View {
-    let symbol: String
-    /// The icon's color when it has its own, as a folder's does.
-    var tint: Color?
+    let icon: SidebarIcon
     var count: Int?
     var selected = false
     /// Something is being dragged over the row.
@@ -232,10 +240,7 @@ struct SidebarRowLabel<Title: View>: View {
 
     var body: some View {
         HStack(spacing: 9) {
-            Image(systemName: symbol)
-                .font(.system(size: 12.5))
-                .foregroundStyle(tint ?? (selected ? Palette.accent : Palette.textSecondary))
-                .frame(width: 18)
+            SidebarIconView(icon: icon)
             title
                 .font(.system(size: 13, weight: selected ? .semibold : .regular))
                 .foregroundStyle(selected ? Palette.textPrimary : Palette.textSecondary)
@@ -247,16 +252,96 @@ struct SidebarRowLabel<Title: View>: View {
                     .foregroundStyle(Palette.textSecondary)
             }
         }
-        .padding(.horizontal, 9)
-        .padding(.vertical, 7)
+        .padding(.leading, 6)
+        .padding(.trailing, 9)
+        .padding(.vertical, 5)
         .background(RowBackground(selected: selected, targeted: targeted))
         .contentShape(Rectangle())
     }
 }
 
 extension SidebarRowLabel where Title == Text {
-    init(_ title: String, symbol: String, tint: Color? = nil, count: Int? = nil, selected: Bool = false) {
-        self.init(symbol: symbol, tint: tint, count: count, selected: selected) { Text(title) }
+    init(_ title: String, icon: SidebarIcon, count: Int? = nil, selected: Bool = false) {
+        self.init(icon: icon, count: count, selected: selected) { Text(title) }
+    }
+}
+
+/// A sidebar row's icon, 20 points square.
+struct SidebarIconView: View {
+    let icon: SidebarIcon
+    static let size: CGFloat = 20
+
+    var body: some View {
+        Group {
+            switch icon {
+            case .tile(let name):
+                Image("icon-\(name)")
+                    .resizable()
+                    .interpolation(.high)
+            case .folder(let hex):
+                GlassTile(hex: hex, glass: "icon-folder-glass")
+            case .symbol(let symbol, let color):
+                Image(systemName: symbol)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(color)
+            }
+        }
+        .frame(width: Self.size, height: Self.size)
+    }
+}
+
+/// One of the app's glass glyphs on a tile in any color, drawn as the glass
+/// icons' tiles are: a superellipse, a shade lighter at the top than at the
+/// bottom.
+struct GlassTile: View {
+    let hex: String
+    /// The glass, on a clear ground, from the asset catalog.
+    let glass: String
+
+    var body: some View {
+        let base = HexColor(hex)
+        Squircle()
+            .fill(LinearGradient(colors: [base.mixed(0.05).color, base.mixed(-0.06).color], startPoint: .top, endPoint: .bottom))
+            .overlay {
+                Image(glass)
+                    .resizable()
+                    .interpolation(.high)
+            }
+            .overlay {
+                // A tile about as light as the page gets a fine edge, as folders do.
+                if FolderTone(hex).isPale {
+                    Squircle().strokeBorder(Palette.border, lineWidth: 0.5)
+                }
+            }
+    }
+}
+
+/// The glass icons' tile: the superellipse |x|^2.5 + |y|^2.5 = 1.
+struct Squircle: InsettableShape {
+    var inset: CGFloat = 0
+
+    func path(in rect: CGRect) -> Path {
+        let r = rect.insetBy(dx: inset, dy: inset)
+        let a = r.width / 2
+        let b = r.height / 2
+        var path = Path()
+        let steps = 96
+        for i in 0..<steps {
+            let t = 2 * Double.pi * Double(i) / Double(steps)
+            let c = cos(t)
+            let s = sin(t)
+            let point = CGPoint(
+                x: r.midX + a * CGFloat(copysign(pow(abs(c), 0.8), c)),
+                y: r.midY + b * CGFloat(copysign(pow(abs(s), 0.8), s))
+            )
+            if i == 0 { path.move(to: point) } else { path.addLine(to: point) }
+        }
+        path.closeSubpath()
+        return path
+    }
+
+    func inset(by amount: CGFloat) -> Squircle {
+        Squircle(inset: inset + amount)
     }
 }
 
@@ -370,7 +455,7 @@ struct SidebarFooter: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             SettingsLink {
-                SidebarRowLabel("Settings", symbol: "gearshape")
+                SidebarRowLabel("Settings", icon: .tile("settings"))
             }
             .buttonStyle(.plain)
             .focusEffectDisabled()

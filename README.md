@@ -48,6 +48,14 @@ Ovyl uses Beam's colors and controls, and follows the system's light or dark app
 - **Folders keep the colors you pick** with the color flower.
 - **Settings is laid out as Beam's:** a sidebar of panes with the mark at the top, made of the same parts as the main sidebar (same width, rows, selection and hairline), and each pane a large title over cards of rows split by hairlines, with green switches, capsule choices and values in small washed capsules.
 
+## Icons
+
+The sidebars use glass icons made with the tasteful-icons skill: a milky white glass glyph on a superellipse tile in one of Ovyl's earth tones. Home, New and Settings in the window's sidebar; Speech, Screen Text, Formatting, Assistant and Storage in Settings, where each pane's icon also stands beside its title. A folder in the sidebar is the same folder glass on a tile in the folder's own color.
+
+![The icons](design/icons/build/preview.png)
+
+The glyphs are written in `design/icons/make-spec.py`. `python3 design/icons/export.py` builds them (SVGs and 1024-point PNGs in `design/icons/build`) and puts them in the asset catalog as `icon-<name>`.
+
 ## The logo
 
 The mark is three slanted strokes, tallest first, standing on one line. The app icon is an Icon Composer document, `Ovyl/Resources/AppIcon.icon`: in Beam's icon colors, softly lit ink strokes on Beam green, and in dark mode green strokes with a pale edge on near-black under a green glow; clear and tinted icons get plain white strokes. Each stroke is its own layer, lit across its width from the top left. Open it in Icon Composer to change it.
