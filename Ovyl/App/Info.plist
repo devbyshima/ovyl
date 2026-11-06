@@ -78,7 +78,7 @@
 			<key>UTTypeDescription</key>
 			<string>Ovyl Note</string>
 			<key>UTTypeIdentifier</key>
-			<string>com.fulltimestudio.ovyl.note</string>
+			<string>com.devbyshima.ovyl.note</string>
 		</dict>
 		<dict>
 			<key>UTTypeConformsTo</key>
@@ -88,7 +88,7 @@
 			<key>UTTypeDescription</key>
 			<string>Ovyl Folder</string>
 			<key>UTTypeIdentifier</key>
-			<string>com.fulltimestudio.ovyl.folder</string>
+			<string>com.devbyshima.ovyl.folder</string>
 		</dict>
 	</array>
 </dict>

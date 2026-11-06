@@ -3,7 +3,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 extension UTType {
-    static let ovylNote = UTType(exportedAs: "com.fulltimestudio.ovyl.note")
+    static let ovylNote = UTType(exportedAs: "com.devbyshima.ovyl.note")
 }
 
 /// Notes dragged in the window, to drop on a folder: the note dragged, or

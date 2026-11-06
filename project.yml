@@ -1,6 +1,6 @@
 name: Ovyl
 options:
-  bundleIdPrefix: com.fulltimestudio
+  bundleIdPrefix: com.devbyshima
   deploymentTarget:
     macOS: "27.0"
   createIntermediateGroups: true
@@ -17,7 +17,7 @@ settings:
     MARKETING_VERSION: "1.0.0"
     CURRENT_PROJECT_VERSION: "1"
     CODE_SIGN_STYLE: Automatic
-    DEVELOPMENT_TEAM: 7WHQR6L96K
+    DEVELOPMENT_TEAM: W46T258AXM
     SWIFT_APPROACHABLE_CONCURRENCY: YES
     SWIFT_UPCOMING_FEATURE_EXISTENTIAL_ANY: YES
     ENABLE_USER_SCRIPT_SANDBOXING: YES
@@ -63,7 +63,7 @@ targets:
         com.apple.security.network.client: true
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.fulltimestudio.ovyl
+        PRODUCT_BUNDLE_IDENTIFIER: com.devbyshima.ovyl
         PRODUCT_NAME: Ovyl
         ENABLE_PREVIEWS: YES
         ENABLE_HARDENED_RUNTIME: YES
@@ -81,10 +81,10 @@ targets:
         NSHumanReadableCopyright: Everything stays on this Mac.
         NSSpeechRecognitionUsageDescription: Ovyl transcribes the speech in your videos and recordings on this Mac. Nothing leaves your computer.
         UTExportedTypeDeclarations:
-          - UTTypeIdentifier: com.fulltimestudio.ovyl.note
+          - UTTypeIdentifier: com.devbyshima.ovyl.note
             UTTypeDescription: Ovyl Note
             UTTypeConformsTo: [public.data]
-          - UTTypeIdentifier: com.fulltimestudio.ovyl.folder
+          - UTTypeIdentifier: com.devbyshima.ovyl.folder
             UTTypeDescription: Ovyl Folder
             UTTypeConformsTo: [public.data]
         CFBundleDocumentTypes:
@@ -114,7 +114,7 @@ targets:
       - target: Ovyl
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.fulltimestudio.ovyl.tests
+        PRODUCT_BUNDLE_IDENTIFIER: com.devbyshima.ovyl.tests
         TEST_HOST: $(BUILT_PRODUCTS_DIR)/Ovyl.app/Contents/MacOS/Ovyl
         BUNDLE_LOADER: $(TEST_HOST)
         GENERATE_INFOPLIST_FILE: YES

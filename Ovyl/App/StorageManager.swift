@@ -45,7 +45,7 @@ final class StorageManager {
 
     /// Where Core ML keeps the speech model compiled for this Mac.
     nonisolated static var speechCacheRoot: URL {
-        let bundle = Bundle.main.bundleIdentifier ?? "com.fulltimestudio.ovyl"
+        let bundle = Bundle.main.bundleIdentifier ?? "com.devbyshima.ovyl"
         return URL.cachesDirectory.appending(path: bundle, directoryHint: .isDirectory).appending(path: "com.apple.e5rt.e5bundlecache", directoryHint: .isDirectory)
     }
 

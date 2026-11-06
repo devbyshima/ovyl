@@ -3,7 +3,7 @@ import Security
 
 /// The user's Anthropic API key, kept in the login keychain.
 nonisolated enum AnthropicKey {
-    private static let service = "com.fulltimestudio.ovyl.anthropic"
+    private static let service = "com.devbyshima.ovyl.anthropic"
     private static let account = "api-key"
 
     static var value: String? {
